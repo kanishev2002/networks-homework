@@ -1,26 +1,21 @@
 import subprocess
+import re
 
-def ping(host, packet_size):
-    """
-    Ping a host with a specified packet size.
+def parse_mtu(output: str):
+    mtu_line = None
+    for line in output.splitlines():
+        if 'pmtu' in line:
+            mtu_line = line
+            break
     
-    Args:
-    - host (str): The target host to ping.
-    - packet_size (int): The size of the packet to send.
+    if mtu_line:
+        match = re.search(r'pmtu (\d+)', mtu_line)
+        if match:
+            mtu = int(match.group(1))
+            return mtu
 
-    Returns:
-    - bool: True if the ping was successful, False otherwise.
-    """
-    try:
-        result = subprocess.run(
-                    ['ping', host, '-c', '1', '-M', 'do', '-s', str(packet_size)], 
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
-        return result.returncode == 0
-    except Exception as e:
-        print(f'Произошла критическая ошибка: {e}')
-        exit(1)
+    print("Произошла ошибка. Информация об MTU не найдена.")
+    exit(1)
 
 
 def main():
@@ -31,20 +26,19 @@ def main():
         print('Похоже, что введенный вами адрес не существует. Пожалуйста, попробуйте еще раз.')
         return
     
-    l = 56
-    r = 65537
-
-    while r - l > 1:
-        m = (l + r) // 2
-        if not ping(target_host, m):
-            r = m
-        else:
-            l = m
+    try:
+        result = subprocess.run(['tracepath', target_host], 
+                                stdout=subprocess.PIPE, 
+                                stderr=subprocess.PIPE, 
+                                text=True)
+        output = result.stdout
+        mtu = parse_mtu(output)
+        print(f'Минимальное MTU по пути к "{target_host}" = {mtu}')
+        
     
-    print(f'Минимальное MTU по пути к "{target_host}" = {l}')
-
-    
-
+    except Exception as e:
+        print(f"Произошла ошибка: {e}")
+        exit(1)
 
 
 if __name__ == "__main__":
